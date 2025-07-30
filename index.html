@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nachricht an Server senden</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Benutzerdefinierte Schriftart */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Zusätzliches Styling für responsives Design */
+        @media (max-width: 640px) {
+            .container {
+                padding: 1rem;
+            }
+            textarea {
+                min-height: 120px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex items-center justify-center p-4">
+    <div class="container bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Nachricht senden</h1>
+
+        <div class="mb-4">
+            <label for="messageInput" class="block text-gray-700 text-sm font-semibold mb-2">Ihre Nachricht:</label>
+            <textarea
+                id="messageInput"
+                class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition duration-200 resize-y min-h-[100px]"
+                placeholder="Geben Sie hier Ihre Nachricht ein..."
+                rows="5"
+            ></textarea>
+        </div>
+
+        <button
+            id="sendButton"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75"
+        >
+            Nachricht senden
+        </button>
+
+        <div id="responseMessage" class="mt-6 p-4 rounded-lg text-center hidden">
+            <!-- Antwortnachrichten werden hier angezeigt -->
+        </div>
+    </div>
+
+    <script>
+        // Server-URL wurde auf die öffentliche URL aktualisiert, um die Bereitstellung auf GitHub Pages zu ermöglichen.
+        const SERVER_URL = 'https://mobilneard-main-node-backend.mein-gewinnspiel-server.com/message'; // Aktualisierter Endpunkt
+
+        // Elemente aus dem DOM abrufen
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const responseMessageDiv = document.getElementById('responseMessage');
+
+        /**
+         * Zeigt eine Nachricht im Antwortbereich an.
+         * @param {string} message - Die anzuzeigende Nachricht.
+         * @param {string} type - Der Typ der Nachricht ('success', 'error', 'info').
+         */
+        function displayMessage(message, type) {
+            responseMessageDiv.textContent = message;
+            responseMessageDiv.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-blue-100', 'text-blue-800');
+
+            if (type === 'success') {
+                responseMessageDiv.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                responseMessageDiv.classList.add('bg-red-100', 'text-red-800');
+            } else {
+                responseMessageDiv.classList.add('bg-blue-100', 'text-blue-800');
+            }
+            responseMessageDiv.classList.remove('hidden');
+        }
+
+        /**
+         * Sendet die Nachricht an den Server.
+         */
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+
+            if (!message) {
+                displayMessage('Bitte geben Sie eine Nachricht ein.', 'info');
+                return;
+            }
+
+            // Button deaktivieren und Ladezustand anzeigen
+            sendButton.disabled = true;
+            sendButton.textContent = 'Senden...';
+            displayMessage('Sende Nachricht...', 'info');
+
+            try {
+                // Fügen Sie 'mode: "cors"' hinzu, um explizit CORS-Anfragen zu kennzeichnen.
+                // Dies löst das Problem nicht direkt, wenn der Server keine CORS-Header sendet,
+                // macht aber die Absicht klar.
+                const response = await fetch(SERVER_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // Optional: Fügen Sie hier weitere Header hinzu, z.B. für Authentifizierung
+                    },
+                    body: JSON.stringify({ message: message }), // Nachricht als JSON senden
+                    mode: 'cors' // Wichtig für Cross-Origin-Anfragen
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    displayMessage(`Nachricht erfolgreich gesendet! Serverantwort: ${JSON.stringify(result)}`, 'success');
+                    messageInput.value = ''; // Textfeld leeren
+                } else {
+                    const errorText = await response.text();
+                    console.error('Serverantwort (Fehler):', response.status, response.statusText, errorText);
+                    displayMessage(`Fehler beim Senden der Nachricht: ${response.status} ${response.statusText} - ${errorText}`, 'error');
+                }
+            } catch (error) {
+                console.error('Netzwerkfehler (im Catch-Block):', error);
+                // Der Fehler "Failed to fetch" tritt auf, wenn die Anfrage vom Browser blockiert wird,
+                // typischerweise wegen CORS oder wenn der Server nicht erreichbar ist.
+                if (error instanceof TypeError && error.message === 'Failed to fetch') {
+                    displayMessage(
+                        `Es gab ein Problem mit der Anfrage. Dies ist höchstwahrscheinlich ein CORS-Problem auf der Serverseite. ` +
+                        `Bitte stellen Sie sicher, dass Ihr Server (${SERVER_URL.split('/message')[0]}) ` +
+                        `so konfiguriert ist, dass er Cross-Origin-Anfragen von dieser Quelle zulässt, indem er die ` +
+                        `'Access-Control-Allow-Origin'-Header korrekt setzt. ` +
+                        `Alternativ könnte der Server nicht erreichbar sein oder die URL ist falsch.`,
+                        'error'
+                    );
+                } else {
+                    displayMessage(`Es gab ein unerwartetes Problem mit der Anfrage: ${error.message}`, 'error');
+                }
+            } finally {
+                // Button wieder aktivieren
+                sendButton.disabled = false;
+                sendButton.textContent = 'Nachricht senden';
+            }
+        }
+
+        // Event-Listener für den Senden-Button
+        sendButton.addEventListener('click', sendMessage);
+
+        // Optional: Nachricht senden, wenn Enter gedrückt wird (im Textfeld)
+        messageInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) { // Shift+Enter für Zeilenumbruch
+                event.preventDefault(); // Standardverhalten (neue Zeile) verhindern
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
